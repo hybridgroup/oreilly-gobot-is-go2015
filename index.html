@@ -41,7 +41,8 @@
         <section>
           <section>
             <h1>Gobot Is Go</h1>
-            <h2>Using Golang For Robotics and the Internet of Things</h2>
+            <h2>Using Golang For Robotics</h2>
+            <h2>and the Internet of Things</h2>
             <h3>hybridgroup.com</h3>
           </section>
           <section>
@@ -97,7 +98,7 @@
         </section>
 
         <section>
-          <h2>A Go Framework for Robotics & the Internet of Things</h2>
+          <h2>A Go Framework for Robotics<br>& the Internet of Things</h2>
         </section>
 
         <section>
@@ -114,7 +115,10 @@
 
         <section>
           <h2>
-            <blockquote>By its design, Go proposes an approach for the construction of system software on multicore machines</blockquote>
+            <blockquote>By its design, Go proposes an approach for the<br>
+            construction of<br>
+            system software<br>
+            on multicore machines</blockquote>
             <figcaption>Golang FAQ</figcaption>
           </h2>
         </section>
@@ -177,7 +181,38 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "time"
+
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/firmata"
+  "github.com/hybridgroup/gobot/platforms/gpio"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  firmataAdaptor := firmata.NewFirmataAdaptor("arduino", "/dev/ttyACM0")
+  led := gpio.NewLedDriver(firmataAdaptor, "led", "13")
+
+  work := func() {
+    gobot.Every(1*time.Second, func() {
+      led.Toggle()
+    })
+  }
+
+  robot := gobot.NewRobot("bot",
+    []gobot.Connection{firmataAdaptor},
+    []gobot.Device{led},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
 
@@ -193,7 +228,38 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "time"
+
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/gpio"
+  "github.com/hybridgroup/gobot/platforms/intel-iot/edison"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  e := edison.NewEdisonAdaptor("edison")
+  led := gpio.NewLedDriver(e, "led", "3")
+
+  work := func() {
+    gobot.Every(1*time.Second, func() {
+      led.Toggle()
+    })
+  }
+
+  robot := gobot.NewRobot("blinkBot",
+    []gobot.Connection{e},
+    []gobot.Device{led},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
 
@@ -209,7 +275,41 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/gpio"
+  "github.com/hybridgroup/gobot/platforms/intel-iot/edison"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  e := edison.NewEdisonAdaptor("edison")
+
+  button := gpio.NewButtonDriver(e, "myButton", "2")
+  led := gpio.NewLedDriver(e, "myLed", "3")
+
+  work := func() {
+    gobot.On(button.Event("push"), func(data interface{}) {
+      led.On()
+    })
+    gobot.On(button.Event("release"), func(data interface{}) {
+      led.Off()
+    })
+  }
+
+  robot := gobot.NewRobot("buttonBot",
+    []gobot.Connection{e},
+    []gobot.Device{led, button},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
 
@@ -225,7 +325,44 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "fmt"
+
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/gpio"
+  "github.com/hybridgroup/gobot/platforms/intel-iot/edison"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  e := edison.NewEdisonAdaptor("edison")
+  sensor := gpio.NewAnalogSensorDriver(e, "sensor", "0")
+  led := gpio.NewLedDriver(e, "led", "3")
+
+  work := func() {
+    gobot.On(sensor.Event("data"), func(data interface{}) {
+      brightness := uint8(
+        gobot.ToScale(gobot.FromScale(float64(data.(int)), 0, 4096), 0, 255),
+      )
+      fmt.Println("sensor", data)
+      fmt.Println("brightness", brightness)
+      led.Brightness(brightness)
+    })
+  }
+
+  robot := gobot.NewRobot("sensorBot",
+    []gobot.Connection{e},
+    []gobot.Device{sensor, led},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
 
@@ -241,7 +378,60 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "fmt"
+  "time"
+
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/api"
+  "github.com/hybridgroup/gobot/platforms/sphero"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+  api.NewAPI(gbot).Start()
+
+  adaptor := sphero.NewSpheroAdaptor("Sphero", "/dev/rfcomm0")
+  spheroDriver := sphero.NewSpheroDriver(adaptor, "sphero")
+
+  work := func() {
+    spheroDriver.SetDataStreaming(sphero.DefaultDataStreamingConfig())
+    spheroDriver.SetRGB(0, 0, 255)
+
+    gobot.On(spheroDriver.Event(sphero.Collision), func(data interface{}) {
+      fmt.Printf("Collision! %+v\n", data)
+    })
+
+    gobot.On(spheroDriver.Event(sphero.SensorData), func(data interface{}) {
+      fmt.Printf("Streaming Data! %+v\n", data)
+    })
+
+    gobot.Every(3*time.Second, func() {
+      spheroDriver.Roll(30, uint16(gobot.Rand(360)))
+    })
+
+  }
+
+  robot := gobot.NewRobot("sphero",
+    []gobot.Connection{adaptor},
+    []gobot.Device{spheroDriver},
+    work,
+  )
+
+  robot.AddCommand("random", func(params map[string]interface{}) interface{} {
+    r := uint8(gobot.Rand(255))
+    g := uint8(gobot.Rand(255))
+    b := uint8(gobot.Rand(255))
+    spheroDriver.SetRGB(r, g, b)
+    return nil
+  })
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
 
@@ -251,18 +441,47 @@
         </section>
 
         <section>
+          <h2>Front Ends and Human Interfaces</h2>
+        </section>
+
+        <section>
+          <h2>Common Protocol for Programming Physical Input/Output</h2>
+          <h3>cppp.io</h3>
+        </section>
+
+        <section>
+          <div class="image-container">
+            <img src="images/commander-logo.png">
+          </div>
+          <h3>commander.io</h3>
+        </section>
+
+        <section>
+          <div class="image-container">
+            <img src="images/robeaux-logo.png">
+          </div>
+          <h3>robeaux.io</h3>
+        </section>
+
+        <section>
           <section>
             <h2>Sphero + Robeaux + commander.io</h2>
           </section>
 
           <section>
             <pre><code data-trim>
-
+...
+api.NewAPI(gbot).Start()
+...
             </code></pre>
           </section>
 
           <section>
             <img src="http://localhost:8080/?action=stream">  
+          </section>
+
+          <section>
+            <a target="_blank" href="http://192.168.1.152:3000/">Robeaux</a>
           </section>
         </section>
 
@@ -273,7 +492,52 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "math"
+
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/leap"
+  "github.com/hybridgroup/gobot/platforms/sphero"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  leapAdaptor := leap.NewLeapMotionAdaptor("leap", "127.0.0.1:6437")
+  spheroAdaptor := sphero.NewSpheroAdaptor("Sphero", "/dev/tty.Sphero-YBW-RN-SPP")
+
+  leapDriver := leap.NewLeapMotionDriver(leapAdaptor, "leap")
+  spheroDriver := sphero.NewSpheroDriver(spheroAdaptor, "sphero")
+
+  work := func() {
+    gobot.On(leapDriver.Event("message"), func(data interface{}) {
+      hands := data.(leap.Frame).Hands
+
+      if len(hands) > 0 {
+        x := math.Abs(hands[0].Direction[0])
+        y := math.Abs(hands[0].Direction[1])
+        z := math.Abs(hands[0].Direction[2])
+        spheroDriver.SetRGB(scale(x), scale(y), scale(z))
+      }
+    })
+  }
+
+  robot := gobot.NewRobot("leapBot",
+    []gobot.Connection{leapAdaptor, spheroAdaptor},
+    []gobot.Device{leapDriver, spheroDriver},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
+
+func scale(position float64) uint8 {
+  return uint8(gobot.ToScale(gobot.FromScale(position, 0, 1), 0, 255))
+}
             </code></pre>
           </section>
 
@@ -289,9 +553,127 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "fmt"
+  "net/url"
+  "strconv"
+  "time"
+
+  "github.com/hybridgroup/gobot"
+  MQTT "github.com/hybridgroup/gobot/platforms/mqtt"
+  SPHERO "github.com/hybridgroup/gobot/platforms/sphero"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  mqtt := MQTT.NewMqttAdaptor("server", "tcp://192.168.1.152:1883", "spheroStation")
+
+  sa := SPHERO.NewSpheroAdaptor("Sphero", "/dev/rfcomm0")
+  sphero := SPHERO.NewSpheroDriver(sa, "sphero")
+
+  work := func() {
+    x := 0
+    y := 0
+
+    sphero.SetBackLED(255)
+
+    mqtt.On("hand", func(data []byte) {
+      v, _ := url.ParseQuery(string(data))
+      x, _ = strconv.Atoi(v.Get("x"))
+      y, _ = strconv.Atoi(v.Get("y"))
+      fmt.Println(x, y)
+    })
+
+    gobot.Every(1*time.Second, func() {
+      sphero.SetRGB(uint8(gobot.Rand(255)), uint8(gobot.Rand(255)), uint8(gobot.Rand(255)))
+    })
+
+    gobot.Every(100*time.Millisecond, func() {
+      if x != 0 {
+        if x > 45 {
+          sphero.Roll(40, uint16(gobot.ToScale(gobot.FromScale(float64(x), 45, 90), 90, 180)))
+        } else {
+          sphero.Roll(40, uint16(gobot.ToScale(gobot.FromScale(float64(x), 0, 45), 270, 359)))
+        }
+      } else {
+        if y > 45 {
+          sphero.Roll(40, uint16(gobot.ToScale(gobot.FromScale(float64(y), 45, 90), 0, 90)))
+        } else {
+          sphero.Roll(40, uint16(gobot.ToScale(gobot.FromScale(float64(y), 0, 45), 180, 270)))
+        }
+      }
+    })
+  }
+
+  robot := gobot.NewRobot("mqttBot",
+    []gobot.Connection{mqtt, sa},
+    []gobot.Device{sphero},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
+
+          <section>
+            <pre><code data-trim>
+package main
+
+import (
+  "fmt"
+  "net/url"
+
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/leap"
+  MQTT "github.com/hybridgroup/gobot/platforms/mqtt"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  mqtt := MQTT.NewMqttAdaptor("server", "tcp://127.0.0.1:1883", "leapStation")
+
+  leapAdaptor := leap.NewLeapMotionAdaptor("leap", "127.0.0.1:6437")
+  leapDriver := leap.NewLeapMotionDriver(leapAdaptor, "leap")
+
+  work := func() {
+    gobot.On(leapDriver.Event("message"), func(data interface{}) {
+      hands := data.(leap.Frame).Hands
+
+      if len(hands) > 0 {
+        y := gobot.ToScale(gobot.FromScale(hands[0].Y(), 50, 200), 0, 90)
+        x := gobot.ToScale(gobot.FromScale(hands[0].X(), -30, 50), 0, 90)
+
+        dgram := url.Values{
+          "x": {fmt.Sprintf("%v", int(x))},
+          "y": {fmt.Sprintf("%v", int(y))},
+        }
+
+        fmt.Println(dgram)
+        mqtt.Publish("hand", []byte(dgram.Encode()))
+      }
+    })
+  }
+
+  robot := gobot.NewRobot("leapBot",
+    []gobot.Connection{mqtt, leapAdaptor},
+    []gobot.Device{leapDriver},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
+            </code></pre>
+          </section>
+
 
           <section>
             <img src="http://localhost:8080/?action=stream">  
@@ -305,7 +687,39 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "time"
+
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/ardrone"
+)
+
+func main() {
+  gbot := gobot.NewGobot()
+
+  ardroneAdaptor := ardrone.NewArdroneAdaptor("Drone")
+  drone := ardrone.NewArdroneDriver(ardroneAdaptor, "Drone")
+
+  work := func() {
+    drone.TakeOff()
+    gobot.On(drone.Event("flying"), func(data interface{}) {
+      gobot.After(3*time.Second, func() {
+        drone.Land()
+      })
+    })
+  }
+
+  robot := gobot.NewRobot("drone",
+    []gobot.Connection{ardroneAdaptor},
+    []gobot.Device{drone},
+    work,
+  )
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
 
@@ -321,7 +735,88 @@
 
           <section>
             <pre><code data-trim>
+package main
 
+import (
+  "fmt"
+  "math"
+  "path"
+  "runtime"
+  "time"
+
+  cv "github.com/hybridgroup/go-opencv/opencv"
+  "github.com/hybridgroup/gobot"
+  "github.com/hybridgroup/gobot/platforms/ardrone"
+  "github.com/hybridgroup/gobot/platforms/opencv"
+)
+
+func main() {
+  runtime.GOMAXPROCS(runtime.NumCPU())
+
+  gbot := gobot.NewGobot()
+
+  _, currentfile, _, _ := runtime.Caller(0)
+  cascade := path.Join(path.Dir(currentfile), "haarcascade_frontalface_alt.xml")
+  window := opencv.NewWindowDriver("window")
+  camera := opencv.NewCameraDriver("camera", "tcp://192.168.1.1:5555")
+  ardroneAdaptor := ardrone.NewArdroneAdaptor("Drone")
+  drone := ardrone.NewArdroneDriver(ardroneAdaptor, "drone")
+
+  work := func() {
+    detect := false
+    drone.TakeOff()
+    var image *cv.IplImage
+    gobot.On(camera.Event("frame"), func(data interface{}) {
+      image = data.(*cv.IplImage)
+      if detect == false {
+        window.ShowImage(image)
+      }
+    })
+    gobot.On(drone.Event("flying"), func(data interface{}) {
+      gobot.After(1*time.Second, func() { drone.Up(0.2) })
+      gobot.After(2*time.Second, func() { drone.Hover() })
+      gobot.After(5*time.Second, func() {
+        detect = true
+        gobot.Every(300*time.Millisecond, func() {
+          drone.Hover()
+          i := image
+          faces := opencv.DetectFaces(cascade, i)
+          biggest := 0
+          var face *cv.Rect
+          for _, f := range faces {
+            if f.Width() > biggest {
+              biggest = f.Width()
+              face = f
+            }
+          }
+          if face != nil {
+            opencv.DrawRectangles(i, []*cv.Rect{face}, 0, 255, 0, 5)
+            centerX := float64(image.Width()) * 0.5
+            turn := -(float64(face.X()) - centerX) / centerX
+            fmt.Println("turning:", turn)
+            if turn < 0 {
+              drone.Clockwise(math.Abs(turn * 0.4))
+            } else {
+              drone.CounterClockwise(math.Abs(turn * 0.4))
+            }
+          }
+          window.ShowImage(i)
+        })
+        gobot.After(20*time.Second, func() { drone.Land() })
+      })
+    })
+  }
+
+  robot := gobot.NewRobot("face",
+    []gobot.Connection{ardroneAdaptor},
+    []gobot.Device{window, camera, drone},
+    work,
+  )
+
+  gbot.AddRobot(robot)
+
+  gbot.Start()
+}
             </code></pre>
           </section>
 
